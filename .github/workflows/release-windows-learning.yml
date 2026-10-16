@@ -20,6 +20,7 @@ jobs:
             - name: Verify
               run: |
                   pnpm exec tsc --noEmit
+                  if ($LASTEXITCODE -ne 0) { throw 'Type check failed' }
                   node scripts/test-learning.cjs
             - name: Set release version
               shell: pwsh
