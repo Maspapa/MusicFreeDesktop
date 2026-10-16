@@ -1,4 +1,5 @@
 import '@infra/globalContext/preload';
+import '@infra/learning/preload';
 
 import '@infra/appConfig/preload';
 import '@infra/appSync/preload/main';

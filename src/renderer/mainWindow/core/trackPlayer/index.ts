@@ -23,6 +23,7 @@ import { type IAudioController, createAudioController } from './audioController'
 import PlayQueue from './playQueue';
 import LyricManager from './lyricManager';
 import type { IPlayOptions } from './types';
+import learningMode from '../learningMode';
 import {
     store,
     currentMusicAtom,
@@ -123,6 +124,11 @@ class TrackPlayer {
         this.audioController = createAudioController('web-audio');
         this.playQueue = new PlayQueue();
         this.lyricManager = new LyricManager();
+        learningMode.configure(() => ({
+            lines: store.get(currentLyricAtom)?.parser?.getLyricItems() ?? [],
+            time: store.get(progressAtom).currentTime,
+            pause: () => this.audioController.pause(),
+        }));
 
         // 2. 恢复持久化状态（localStorage 同步读取，首帧可用）
         const volume = syncKV.get('player.volume') ?? 1;
@@ -246,6 +252,7 @@ class TrackPlayer {
         options: IPlayOptions = { restartOnSameMedia: true },
     ): Promise<void> {
         if (this.playQueue.isEmpty) return;
+        if (learningMode.enabled) learningMode.exit();
 
         const queue = this.playQueue.queue;
         index = ((index % queue.length) + queue.length) % queue.length;
@@ -290,7 +297,7 @@ class TrackPlayer {
             // 播放
             store.set(qualityAtom, result.quality ?? quality);
             this.audioController.setTrackSource(result, musicItem);
-            this.audioController.play();
+            if (!learningMode.enabled) this.audioController.play();
             this.consecutiveErrors = 0; // 播放成功，重置错误计数
 
             this.setCurrentMusic(musicItem);
@@ -357,6 +364,10 @@ class TrackPlayer {
 
     /** 手动切到下一首（与 repeatMode 无关，始终前进） */
     async skipToNext(): Promise<void> {
+        if (learningMode.enabled) {
+            learningMode.navigate(1);
+            return;
+        }
         if (this.playQueue.isEmpty) {
             this.clearPlayback();
             return;
@@ -366,6 +377,10 @@ class TrackPlayer {
 
     /** 手动切到上一首（与 repeatMode 无关，始终后退） */
     async skipToPrev(): Promise<void> {
+        if (learningMode.enabled) {
+            learningMode.navigate(-1);
+            return;
+        }
         if (this.playQueue.isEmpty) {
             this.clearPlayback();
             return;
@@ -400,10 +415,15 @@ class TrackPlayer {
     }
 
     pause(): void {
+        if (learningMode.enabled) learningMode.pause();
         this.audioController.pause();
     }
 
     resume(): void {
+        if (learningMode.enabled) {
+            void learningMode.play();
+            return;
+        }
         if (!this.audioController.hasSource) {
             // 无音源（如恢复失败），尝试重新加载当前曲目
             const idx = this.playQueue.getCurrentIndex();
@@ -416,6 +436,11 @@ class TrackPlayer {
     }
 
     togglePlayPause(): void {
+        if (learningMode.enabled) {
+            if (learningMode.speaking) learningMode.pause();
+            else void learningMode.play();
+            return;
+        }
         if (this.audioController.playerState === PlayerState.Playing) {
             this.pause();
         } else {
@@ -479,7 +504,7 @@ class TrackPlayer {
             if (result?.url && this.isCurrentMusic(current)) {
                 this.audioController.setTrackSource(result, musicItem);
                 this.audioController.seekTo(currentTime);
-                if (wasPlaying) this.audioController.play();
+                if (wasPlaying && !learningMode.enabled) this.audioController.play();
                 store.set(qualityAtom, result.quality!);
                 syncKV.set('player.currentQuality', result.quality!);
                 return result.quality === quality;
@@ -559,6 +584,7 @@ class TrackPlayer {
         });
 
         this.audioController.on('ended', async () => {
+            if (learningMode.enabled) return;
             this.resetProgress();
             const repeatMode = store.get(repeatModeAtom);
             if (repeatMode === RepeatMode.Loop) {
@@ -619,6 +645,7 @@ class TrackPlayer {
     // ─── 错误处理 ───
 
     private async handlePlayError(musicItem: IMusicItemSlim | null, _error?: any): Promise<void> {
+        if (learningMode.enabled) return;
         this.resetProgress();
         this.consecutiveErrors++;
 
@@ -662,6 +689,7 @@ class TrackPlayer {
 
     /** 清空播放状态（空队列等场景） */
     private clearPlayback(): void {
+        if (learningMode.enabled) learningMode.exit();
         this.audioController.reset();
         this.lyricManager.reset();
         store.set(currentMusicAtom, null);

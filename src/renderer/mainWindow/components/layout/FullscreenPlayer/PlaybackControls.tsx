@@ -9,6 +9,8 @@
 // FullscreenProgressBar 独立 memo 子组件，隔离 useProgress 高频更新。
 
 import { memo } from 'react';
+import { useAtomValue } from 'jotai';
+import { learningAtom } from '@renderer/mainWindow/core/learningMode';
 import { SkipBack, SkipForward, Play, Pause } from 'lucide-react';
 import { PlayerState } from '@common/constant';
 import formatDuration from '@common/formatDuration';
@@ -62,7 +64,8 @@ const PlaybackControls = memo(function PlaybackControls() {
     const playerState = usePlayerState();
     const repeatMode = useRepeatMode();
 
-    const isPlaying = playerState === PlayerState.Playing;
+    const learning = useAtomValue(learningAtom);
+    const isPlaying = learning.enabled ? learning.speaking : playerState === PlayerState.Playing;
     const hasMusic = currentMusic != null;
 
     const { Icon: RepeatIcon, tipKey: repeatTipKey } = REPEAT_MODE_MAP[repeatMode];

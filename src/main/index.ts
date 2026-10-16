@@ -1,4 +1,5 @@
 import './core/polyfills';
+import { setupLearning } from '@infra/learning/main';
 import { setupGlobalContext } from '@infra/globalContext/main';
 import requestForwarder from '@infra/requestForwarder/main';
 import appConfig from '@infra/appConfig/main';
@@ -101,6 +102,7 @@ async function bootstrapInfra(windowManager: IWindowManager) {
     });
     themePack.setup(windowManager);
     systemUtil.setup(windowManager);
+    setupLearning();
     windowDrag.setup();
     await appTray.setup(windowManager);
     appThumbar.setup(windowManager);

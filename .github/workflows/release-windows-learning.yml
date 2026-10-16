@@ -1,0 +1,58 @@
+name: Release Windows learning mode
+on:
+    workflow_dispatch:
+permissions:
+    contents: write
+jobs:
+    windows:
+        runs-on: windows-latest
+        timeout-minutes: 40
+        steps:
+            - uses: actions/checkout@v5
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Verify
+              run: |
+                  pnpm exec tsc --noEmit
+                  node scripts/test-learning.cjs
+            - name: Set release version
+              shell: pwsh
+              run: |
+                  $version = "1.0.0-beta.4.maspapa.${{ github.run_number }}"
+                  npm version $version --no-git-tag-version --ignore-scripts
+                  "VERSION=$version" >> $env:GITHUB_ENV
+            - run: pnpm run package
+            - name: Build installer and portable ZIP
+              shell: pwsh
+              run: |
+                  & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$env:VERSION" release/build-windows.iss
+                  if ($LASTEXITCODE -ne 0) { throw 'Installer failed' }
+                  Rename-Item out/MusicFreeSetup.exe "MusicFree-$env:VERSION-win32-x64-setup.exe"
+                  New-Item -ItemType Directory out/MusicFree-win32-x64/portable -Force
+                  New-Item -ItemType Directory out/MusicFree-win32-x64/portable/appData -Force
+                  New-Item -ItemType Directory out/MusicFree-win32-x64/portable/userData -Force
+                  New-Item -ItemType File out/MusicFree-win32-x64/portable/.portable -Force
+                  Compress-Archive -Path out/MusicFree-win32-x64/* -DestinationPath "out/MusicFree-$env:VERSION-win32-x64-portable.zip"
+                  Get-ChildItem out -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
+                    "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+                  } | Set-Content out/SHA256SUMS.txt -Encoding ascii
+            - uses: actions/upload-artifact@v6
+              with:
+                  name: windows-learning
+                  path: |
+                      out/*setup.exe
+                      out/*portable.zip
+                      out/SHA256SUMS.txt
+            - name: Publish release
+              shell: pwsh
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  $assets = @(Get-ChildItem out -File | Where-Object { $_.Name -match '(setup\.exe|portable\.zip|SHA256SUMS\.txt)$' } | ForEach-Object { $_.FullName })
+                  gh release create "v$env:VERSION" --target "${{ github.sha }}" --title "MusicFree Windows 学习版 $env:VERSION" --notes-file LEARNING-MODE.md @assets

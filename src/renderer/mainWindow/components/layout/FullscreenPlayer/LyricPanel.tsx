@@ -10,6 +10,9 @@ import { useTranslation } from 'react-i18next';
 import { useLyric } from '@renderer/mainWindow/core/trackPlayer/hooks';
 import type { IParsedLrcItem } from '@common/lyricParser';
 import trackPlayer from '@renderer/mainWindow/core/trackPlayer';
+import { useAtomValue } from 'jotai';
+import { learningAtom } from '@renderer/mainWindow/core/learningMode';
+import LearningPanel, { LearningButton } from './LearningPanel';
 
 interface LyricPanelProps {
     /** 字号缩放比例 (0.8 ~ 1.3) */
@@ -34,6 +37,7 @@ const prefersReducedMotion =
 
 const LyricPanel = memo(function LyricPanel({ fontScale, showTranslation }: LyricPanelProps) {
     const { t } = useTranslation();
+    const learning = useAtomValue(learningAtom);
     const lyricState = useLyric();
     const containerRef = useRef<HTMLDivElement>(null);
     const activeIndexRef = useRef<number>(-1);
@@ -175,6 +179,7 @@ const LyricPanel = memo(function LyricPanel({ fontScale, showTranslation }: Lyri
         };
     }, []);
 
+    if (learning.enabled) return <LearningPanel />;
     if (lyricItems.length === 0) {
         return (
             <div className="l-fullscreen-player__lyric-empty">
@@ -197,6 +202,7 @@ const LyricPanel = memo(function LyricPanel({ fontScale, showTranslation }: Lyri
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
         >
+            <LearningButton />
             {lyricItems.map((item) => {
                 const isActive = item.index === activeIndex;
 

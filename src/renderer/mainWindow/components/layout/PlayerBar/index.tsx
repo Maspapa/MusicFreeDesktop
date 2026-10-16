@@ -4,6 +4,9 @@
 
 import { SkipBack, SkipForward, Play, Pause, ListMusic, Maximize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAtomValue } from 'jotai';
+import { learningAtom } from '@renderer/mainWindow/core/learningMode';
+import { LearningButton } from '../FullscreenPlayer/LearningPanel';
 import { DesktopLyric } from '@renderer/common/icons';
 import { cn } from '@common/cn';
 import { PlayerState } from '@common/constant';
@@ -50,7 +53,8 @@ export default function PlayerBar() {
 
     const [enableDesktopLyric] = useConfigValue('lyric.enableDesktopLyric');
 
-    const isPlaying = playerState === PlayerState.Playing;
+    const learning = useAtomValue(learningAtom);
+    const isPlaying = learning.enabled ? learning.speaking : playerState === PlayerState.Playing;
     const hasMusic = currentMusic != null;
 
     const { Icon: RepeatIcon, tipKey: repeatTipKey } = REPEAT_MODE_MAP[repeatMode];
@@ -171,6 +175,7 @@ export default function PlayerBar() {
 
                 {/* ── 右侧: 工具 ── */}
                 <div className="l-player-bar__right">
+                    <LearningButton />
                     <QualityPopover />
                     <SpeedPopover />
                     <VolumePopover />

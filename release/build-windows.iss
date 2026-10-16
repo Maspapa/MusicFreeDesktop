@@ -9,7 +9,7 @@
 #define MyAppURL "https://musicfree.catcat.work"
 #define MyAppExeName "MusicFree.exe"
 #ifndef MyAppId
-#define MyAppId
+#define MyAppId "D9CD87DD-2B97-4AF5-A2A9-3B3EA8638D37"
 #endif
 
 

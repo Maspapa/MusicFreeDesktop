@@ -1,0 +1,74 @@
+.learning-button,
+.learning-panel button,
+.learning-panel select {
+    color: inherit;
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+.learning-button[aria-pressed='true'] {
+    color: #a6baff;
+}
+.learning-panel {
+    width: 100%;
+    overflow-y: auto;
+    padding: 24px;
+    box-sizing: border-box;
+    .learning-toolbar,
+    .learning-navigation {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+    }
+    .learning-sentence {
+        font-size: 32px;
+        line-height: 1.8;
+        margin: 24px 0;
+        white-space: pre-wrap;
+        button {
+            border: 0;
+            padding: 0 2px;
+            font: inherit;
+            &:hover {
+                background: #80808033;
+            }
+        }
+    }
+    .learning-translation {
+        font-size: 22px;
+        line-height: 1.6;
+        margin-bottom: 16px;
+    }
+    small {
+        opacity: 0.65;
+        font-size: 12px;
+    }
+    .learning-word {
+        margin: 20px 0;
+        padding: 16px;
+        border: 1px solid #80808066;
+        border-radius: 12px;
+        white-space: pre-line;
+        button {
+            margin-left: 12px;
+        }
+    }
+    .learning-navigation {
+        margin-top: 24px;
+    }
+    button:disabled {
+        opacity: 0.35;
+        cursor: default;
+    }
+    select {
+        width: 100%;
+        option {
+            color: #222;
+            background: #fff;
+        }
+    }
+}
