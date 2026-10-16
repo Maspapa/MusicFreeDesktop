@@ -10,21 +10,33 @@ function Await-WinRT($operation, $resultType) {
     $task.GetAwaiter().GetResult()
 }
 $synth = New-Object Windows.Media.SpeechSynthesis.SpeechSynthesizer
-try {
-    $voice = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices | Where-Object { $_.Language -like ($request.language + '-*') } | Select-Object -First 1
-    if (-not $voice) { throw ('Missing Windows voice: ' + $request.language + '. Install it in Settings > Time and language > Speech.') }
-    $synth.Voice = $voice
-    $synth.Options.SpeakingRate = [double]$request.rate
-    $stream = Await-WinRT ($synth.SynthesizeTextToStreamAsync([string]$request.text)) ([Windows.Media.SpeechSynthesis.SpeechSynthesisStream])
+function Speak-Unit([string]$text, [int]$index) {
+    $stream = Await-WinRT ($synth.SynthesizeTextToStreamAsync($text)) ([Windows.Media.SpeechSynthesis.SpeechSynthesisStream])
     $reader = New-Object Windows.Storage.Streams.DataReader($stream)
     try {
         $null = Await-WinRT ($reader.LoadAsync([uint32]$stream.Size)) ([uint32])
         $bytes = New-Object byte[] ([int]$stream.Size)
         $reader.ReadBytes($bytes)
+        if ($index -ge 0) {
+            [Console]::Out.WriteLine(('{"index":' + $index + '}'))
+            [Console]::Out.Flush()
+        }
         if (-not $request.validateOnly) {
             $memory = New-Object System.IO.MemoryStream(,$bytes)
             $player = New-Object System.Media.SoundPlayer($memory)
             try { $player.PlaySync() } finally { $player.Dispose(); $memory.Dispose() }
         }
     } finally { $reader.Dispose(); $stream.Dispose() }
+}
+try {
+    $voice = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices | Where-Object { $_.Language -like ($request.language + '-*') } | Select-Object -First 1
+    if (-not $voice) { throw ('Missing Windows voice: ' + $request.language + '. Install it in Settings > Time and language > Speech.') }
+    $synth.Voice = $voice
+    $synth.Options.SpeakingRate = [double]$request.rate
+    if ($request.words -and $request.words.Count -gt 0) {
+        for ($wordIndex = 0; $wordIndex -lt $request.words.Count; $wordIndex++) {
+            Speak-Unit ([string]$request.words[$wordIndex]) $wordIndex
+            if ($wordIndex -lt $request.words.Count - 1) { Start-Sleep -Milliseconds 400 }
+        }
+    } else { Speak-Unit ([string]$request.text) -1 }
 } finally { $synth.Dispose() }

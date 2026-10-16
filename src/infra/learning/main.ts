@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
 import windowManager from '@main/core/windowManager';
-import { CHANNEL, type Language } from './common';
+import { CHANNEL, WORD_CHANNEL, type Language } from './common';
 
 export function setupLearning() {
     let speech: ChildProcess | undefined;
@@ -35,7 +35,13 @@ export function setupLearning() {
         async (
             event,
             action: string,
-            input?: { text: string; language: Language; rate?: number },
+            input?: {
+                text: string;
+                language: Language;
+                rate?: number;
+                words?: string[];
+                requestId?: number;
+            },
         ) => {
             if (
                 event.sender !== windowManager.__getWindowUnsafe('main')?.webContents ||
@@ -50,7 +56,21 @@ export function setupLearning() {
             const language = input?.language;
             if (!text || text.length > 2000 || !['en', 'ja', 'zh'].includes(language))
                 throw new Error('无效文本或语言');
-            if (action === 'speak') {
+            if (action === 'speak' || action === 'speakWords') {
+                const words = action === 'speakWords' ? input.words : undefined;
+                if (
+                    action === 'speakWords' &&
+                    (!Array.isArray(words) ||
+                        !words.length ||
+                        words.length > 500 ||
+                        words.some(
+                            (word) =>
+                                typeof word !== 'string' || !word.trim() || word.length > 2000,
+                        ) ||
+                        words.join(' ').length > 2000 ||
+                        !Number.isSafeInteger(input.requestId))
+                )
+                    throw new Error('无效逐词朗读请求');
                 stop();
                 if (process.platform !== 'win32') throw new Error('此版本的学习朗读需要 Windows');
                 const rate = input.rate === 0.5 ? 0.5 : 1;
@@ -68,9 +88,34 @@ export function setupLearning() {
                             '-File',
                             path.join(globalContext.appPath.res, 'learning/speak.ps1'),
                         ],
-                        { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] },
+                        { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
                     );
                     speech = child;
+                    let output = '';
+                    child.stdout.on('data', (data) => {
+                        output += data.toString('utf8');
+                        const messages = output.split('\n');
+                        output = messages.pop()!.slice(-1000);
+                        for (const message of messages) {
+                            try {
+                                const progress = JSON.parse(message);
+                                if (
+                                    words &&
+                                    speech === child &&
+                                    !event.sender.isDestroyed() &&
+                                    Number.isInteger(progress.index) &&
+                                    progress.index >= 0 &&
+                                    progress.index < words.length
+                                )
+                                    event.sender.send(WORD_CHANNEL, {
+                                        requestId: input.requestId,
+                                        index: progress.index,
+                                    });
+                            } catch {
+                                /* 忽略非进度输出 */
+                            }
+                        }
+                    });
                     let error = '';
                     let timedOut = false;
                     const timeout = setTimeout(() => {
@@ -95,7 +140,7 @@ export function setupLearning() {
                         else reject(new Error(error || '朗读失败，请安装对应 Windows 语音包'));
                     });
                     child.stdin.on('error', () => {});
-                    child.stdin.end(JSON.stringify({ text, language, rate }));
+                    child.stdin.end(JSON.stringify({ text, language, rate, words }));
                 });
                 return;
             }

@@ -63,10 +63,34 @@ const os = require('node:os');
         await new Promise((resolve) => setTimeout(resolve, 3000));
         await evaluate("document.querySelector('.l-player-bar__cover').click()");
         await evaluate("document.querySelector('.learning-button').click()");
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        // 立即暂停，不播放测试声音。
+        assert.equal(
+            await evaluate("document.querySelector('.learning-reading-style') === null"),
+            true,
+        );
+        assert.ok(
+            await evaluate(
+                "document.querySelector('.learning-toolbar').textContent.includes('逐词跟读')",
+            ),
+        );
+        let highlighted = false;
+        for (let attempt = 0; attempt < 50; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            highlighted = await evaluate(
+                "!!document.querySelector('.learning-sentence button.is-speaking')",
+            );
+            if (highlighted) break;
+        }
+        assert.equal(highlighted, true, 'native word progress reaches highlighted UI');
+        const wordScreenshot = await command('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync('out/learning-word-smoke.png', Buffer.from(wordScreenshot.data, 'base64'));
         await evaluate(
             "[...document.querySelectorAll('.learning-navigation button')].find(b=>b.textContent==='暂停')?.click();learningBridge.stop()",
+        );
+        assert.equal(
+            await evaluate(
+                "document.querySelector('.learning-sentence button.is-speaking') === null",
+            ),
+            true,
         );
         assert.equal(
             await evaluate("document.querySelector('.learning-sentence')?.textContent"),
@@ -88,7 +112,7 @@ const os = require('node:os');
         const screenshot = await command('Page.captureScreenshot', { format: 'png' });
         fs.writeFileSync('out/learning-smoke.png', Buffer.from(screenshot.data, 'base64'));
         console.log(
-            'Desktop smoke passed: startup, IPC dictionaries, learning UI, Chinese translation, next sentence.',
+            'Desktop smoke passed: startup, IPC dictionaries, word-only learning, native progress/highlight, pause, Chinese translation, next sentence.',
         );
     } finally {
         ws.close();

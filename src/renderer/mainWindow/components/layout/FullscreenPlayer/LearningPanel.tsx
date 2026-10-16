@@ -4,7 +4,7 @@ import he from 'he';
 import learningMode, { learningAtom } from '@renderer/mainWindow/core/learningMode';
 import bridge from '@infra/learning/renderer';
 import type { DictionaryEntry } from '@infra/learning/common';
-import { hasChineseTranslation, learningLanguage } from '@common/learningLyrics';
+import { hasChineseTranslation, learningLanguage, learningTokens } from '@common/learningLyrics';
 import './learning.scss';
 import { openFullscreenPlayer } from './fullscreenPlayerState';
 
@@ -22,7 +22,7 @@ export function LearningButton() {
                     if (learningMode.enabled) openFullscreenPlayer();
                 }
             }}
-            title={state.error || '暂停原曲，以半速自然朗读歌词'}
+            title={state.error || '暂停原曲，逐词跟读歌词'}
         >
             {state.enabled ? '退出学习' : '学习模式'}
         </button>
@@ -94,22 +94,13 @@ export default function LearningPanel() {
     }, [word, language, lookupVersion]);
 
     if (!line) return <div>没有可学习的歌词</div>;
-    // Windows Chromium 的 ICU 分词可识别日文词边界，保留原标点和空格。
-    const Segmenter = (
-        Intl as unknown as {
-            Segmenter: new (
-                locale: string,
-                options: { granularity: string },
-            ) => { segment(text: string): Iterable<{ segment: string; isWordLike: boolean }> };
-        }
-    ).Segmenter;
-    const tokens = [...new Segmenter(language, { granularity: 'word' }).segment(line.lrc)];
+    const tokens = learningTokens(line.lrc, language);
     return (
         <section className="learning-panel">
             <div className="learning-toolbar">
                 <LearningButton />
                 <span>
-                    {state.index + 1} / {learningMode.lines.length} · 0.5×
+                    {state.index + 1} / {learningMode.lines.length} · 逐词跟读 0.5× · 间隔 0.4 秒
                 </span>
                 <label>
                     <input
@@ -126,6 +117,8 @@ export default function LearningPanel() {
                         <button
                             type="button"
                             key={index}
+                            className={state.activeToken === index ? 'is-speaking' : undefined}
+                            aria-current={state.activeToken === index ? 'true' : undefined}
                             onClick={() => {
                                 setWord(token.segment);
                                 setLookupVersion((value) => value + 1);

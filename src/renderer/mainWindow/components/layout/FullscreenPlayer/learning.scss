@@ -36,6 +36,11 @@
             &:hover {
                 background: #80808033;
             }
+            &.is-speaking {
+                color: #172554;
+                background: #facc15;
+                box-shadow: 0 0 0 3px #facc15;
+            }
         }
     }
     .learning-translation {

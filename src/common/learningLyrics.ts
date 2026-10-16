@@ -1,5 +1,18 @@
 import type { IParsedLrcItem } from './lyricParser';
 import type { Language } from '../infra/learning/common';
+export function learningTokens(text: string, language: Language) {
+    const Segmenter = (
+        Intl as unknown as {
+            Segmenter: new (
+                locale: string,
+                options: { granularity: string },
+            ) => {
+                segment(text: string): Iterable<{ segment: string; isWordLike: boolean }>;
+            };
+        }
+    ).Segmenter;
+    return [...new Segmenter(language, { granularity: 'word' }).segment(text)];
+}
 export const hasJapanese = (text: string) => /[\u3040-\u30ff]/.test(text);
 export const hasChineseTranslation = (text?: string) =>
     !!text && /[\u3400-\u9fff]/.test(text) && !hasJapanese(text);

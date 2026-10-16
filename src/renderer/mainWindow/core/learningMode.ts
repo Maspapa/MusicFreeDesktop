@@ -2,7 +2,12 @@ import { atom, getDefaultStore } from 'jotai';
 import bridge from '@infra/learning/renderer';
 import type { Language } from '@infra/learning/common';
 import type { IParsedLrcItem } from '@common/lyricParser';
-import { hasJapanese, learningLanguage, learningLines } from '@common/learningLyrics';
+import {
+    hasJapanese,
+    learningLanguage,
+    learningLines,
+    learningTokens,
+} from '@common/learningLyrics';
 
 export const learningAtom = atom({
     enabled: false,
@@ -10,6 +15,7 @@ export const learningAtom = atom({
     index: 0,
     loop: false,
     error: '',
+    activeToken: -1,
 });
 const store = getDefaultStore();
 const state = () => store.get(learningAtom);
@@ -40,7 +46,7 @@ const learningMode = {
     pause() {
         generation++;
         clearTimeout(timer);
-        update({ speaking: false });
+        update({ speaking: false, activeToken: -1 });
         void bridge.stop().catch(() => {});
     },
     async play() {
@@ -51,15 +57,28 @@ const learningMode = {
         getSource().pause();
         update({ speaking: true, error: '' });
         try {
-            await bridge.speak(line.lrc, learningLanguage(line.lrc, songLanguage), 0.5);
+            const language = learningLanguage(line.lrc, songLanguage);
+            const words = learningTokens(line.lrc, language)
+                .map((token, index) => ({ ...token, index }))
+                .filter((token) => token.isWordLike);
+            if (words.length)
+                await bridge.speakWords(
+                    words.map((word) => word.segment),
+                    language,
+                    (index) => {
+                        if (ticket === generation && words[index])
+                            update({ activeToken: words[index].index });
+                    },
+                );
             if (ticket !== generation) return;
-            update({ speaking: false });
+            update({ speaking: false, activeToken: -1 });
             if (state().enabled && state().loop)
                 timer = setTimeout(() => {
                     void this.play();
                 }, 2000);
         } catch (error) {
-            if (ticket === generation) update({ speaking: false, error: String(error) });
+            if (ticket === generation)
+                update({ speaking: false, activeToken: -1, error: String(error) });
         }
     },
     enter() {
