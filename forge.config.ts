@@ -7,6 +7,7 @@ import { WebpackPlugin } from '@electron-forge/plugin-webpack';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import path from 'path';
+import { version } from './package.json';
 
 import { mainConfig } from './config/webpack.main.config';
 import { rendererConfig } from './config/webpack.renderer.config';
@@ -14,6 +15,8 @@ import { preloadConfig } from './config/webpack.preload.config';
 
 const config: ForgeConfig = {
     packagerConfig: {
+        // Windows EXE 版本资源只接受最多四段数字；完整学习版版本保留在 package.json。
+        appVersion: version.split('-')[0],
         asar: {
             unpack: '**/node_modules/{sharp,@img}/**/*',
         },
