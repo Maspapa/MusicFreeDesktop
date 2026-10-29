@@ -215,6 +215,59 @@ async function run() {
     assert.equal(mode.enabled, false);
     assert.equal(calls.length, before);
     assert.match(state().error, /没有歌词/);
+    // 原声学唱：与系统朗读分离，边界、速度、暂停、切换和退出均可验证。
+    let position = 2.5;
+    let speed = 1.25;
+    let originalPlays = 0;
+    const seeks = [];
+    sourceLines = [line('First', 0, 0), line('', 1, 2), line('Second', 2, 4)];
+    mode.configure(() => ({
+        lines: sourceLines,
+        time: position,
+        duration: 8,
+        offset: 0.25,
+        speed,
+        pause: () => paused++,
+        play: () => originalPlays++,
+        seek: (value) => {
+            position = value;
+            seeks.push(value);
+        },
+        setSpeed: (value) => {
+            speed = value;
+        },
+    }));
+    const speechBefore = calls.length;
+    mode.enter('singing');
+    assert.equal(state().kind, 'singing');
+    assert.equal(state().loop, true);
+    assert.equal(seeks.at(-1), 0.25);
+    assert.equal(speed, 1);
+    assert.equal(calls.length, speechBefore, 'original singing never invokes TTS');
+    mode.onProgress(2.24);
+    assert.equal(seeks.length, 2, 'blank timestamp ends the previous sentence');
+    mode.navigate(1);
+    assert.equal(seeks.at(-1), 4.25);
+    mode.cycleSingingRate();
+    assert.equal(speed, 0.75);
+    mode.pause();
+    const playsBefore = originalPlays;
+    mode.cycleSingingRate();
+    mode.onProgress(8);
+    assert.equal(originalPlays, playsBefore, 'paused speed changes do not start playback');
+    await mode.play();
+    assert.equal(speed, 0.5);
+    mode.onEnded();
+    assert.equal(originalPlays, playsBefore + 2, 'end of track repeats rather than changing track');
+    mode.toggleLoop();
+    mode.onProgress(8);
+    assert.equal(state().speaking, false);
+    mode.exit();
+    assert.equal(speed, 1.25, 'normal playback speed is restored');
+    sourceLines = [line('Untimed', 0), line('Lyrics', 1)];
+    mode.enter('singing');
+    assert.equal(mode.enabled, false);
+    assert.match(state().error, /时间轴/);
     for (const [file, query, value] of [
         ['lyric_dictionary.db', 'SELECT * FROM entries WHERE word = ? COLLATE NOCASE', 'hello'],
         ['japanese_dictionary.db', 'SELECT * FROM entries WHERE word = ?', '猫'],

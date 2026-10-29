@@ -128,6 +128,14 @@ class TrackPlayer {
             lines: store.get(currentLyricAtom)?.parser?.getLyricItems() ?? [],
             time: store.get(progressAtom).currentTime,
             pause: () => this.audioController.pause(),
+            duration: store.get(progressAtom).duration,
+            speed: store.get(speedAtom),
+            offset:
+                +(store.get(currentLyricAtom)?.parser?.getMeta()?.offset ?? 0) -
+                this.lyricManager.getUserOffset(),
+            play: () => this.audioController.play(),
+            seek: (time) => this.audioController.seekTo(time),
+            setSpeed: (rate) => this.audioController.setSpeed(rate),
         }));
 
         // 2. 恢复持久化状态（localStorage 同步读取，首帧可用）
@@ -574,6 +582,7 @@ class TrackPlayer {
         this.audioController.on('timeUpdate', (progress) => {
             store.set(progressAtom, progress);
             this.lyricManager.updatePosition(progress.currentTime);
+            learningMode.onProgress(progress.currentTime);
 
             // 每 10 秒写一次 localStorage，最大丢失 10 秒进度
             const now = Date.now();
@@ -584,7 +593,10 @@ class TrackPlayer {
         });
 
         this.audioController.on('ended', async () => {
-            if (learningMode.enabled) return;
+            if (learningMode.enabled) {
+                learningMode.onEnded();
+                return;
+            }
             this.resetProgress();
             const repeatMode = store.get(repeatModeAtom);
             if (repeatMode === RepeatMode.Loop) {
@@ -609,7 +621,7 @@ class TrackPlayer {
 
         this.audioController.on('speedChange', (speed) => {
             store.set(speedAtom, speed);
-            syncKV.set('player.speed', speed);
+            if (!learningMode.enabled) syncKV.set('player.speed', speed);
         });
     }
 

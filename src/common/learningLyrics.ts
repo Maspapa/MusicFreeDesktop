@@ -41,3 +41,31 @@ export function learningLines(lyrics: IParsedLrcItem[]): IParsedLrcItem[] {
     }
     return result;
 }
+
+export function singingLines(lyrics: IParsedLrcItem[]): IParsedLrcItem[] {
+    const result: IParsedLrcItem[] = [];
+    for (const item of learningLines(lyrics)
+        .filter((line) => Number.isFinite(line.time))
+        .sort((a, b) => a.time - b.time)) {
+        if (!result.length || Math.abs(result[result.length - 1].time - item.time) > 0.01)
+            result.push(item);
+    }
+    return result;
+}
+
+export function singingRange(
+    line: IParsedLrcItem,
+    lyrics: IParsedLrcItem[],
+    offset: number,
+    duration: number,
+) {
+    const start = Math.max(0, line.time + offset);
+    const next = lyrics
+        .filter((item) => Number.isFinite(item.time) && item.time > line.time + 0.01)
+        .map((item) => item.time + offset);
+    const end = Math.min(
+        next.length ? Math.min(...next) : Infinity,
+        duration > 0 ? duration : Infinity,
+    );
+    return Number.isFinite(end) && end > start + 0.05 ? { start, end } : null;
+}

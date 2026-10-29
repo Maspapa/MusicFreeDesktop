@@ -22,7 +22,7 @@ export function LearningButton() {
                     if (learningMode.enabled) openFullscreenPlayer();
                 }
             }}
-            title={state.error || '暂停原曲，逐词跟读歌词'}
+            title={state.error || '学单词／句子，或循环原声学唱法'}
         >
             {state.enabled ? '退出学习' : '学习模式'}
         </button>
@@ -99,9 +99,29 @@ export default function LearningPanel() {
         <section className="learning-panel">
             <div className="learning-toolbar">
                 <LearningButton />
+                <select
+                    aria-label="学习类型"
+                    value={state.kind}
+                    onChange={(event) =>
+                        learningMode.enter(event.target.value as 'words' | 'singing')
+                    }
+                >
+                    <option value="words">学单词／句子</option>
+                    <option value="singing">学唱法</option>
+                </select>
                 <span>
-                    {state.index + 1} / {learningMode.lines.length} · 逐词跟读 0.5× · 间隔 0.4 秒
+                    {state.index + 1} / {learningMode.lines.length} ·{' '}
+                    {state.kind === 'singing' ? '歌曲原声' : '逐词跟读 0.5× · 间隔 0.4 秒'}
                 </span>
+                {state.kind === 'singing' && (
+                    <button
+                        type="button"
+                        onClick={() => learningMode.cycleSingingRate()}
+                        title="切换原声播放速度"
+                    >
+                        {state.singingRate}×
+                    </button>
+                )}
                 <label>
                     <input
                         type="checkbox"
@@ -194,7 +214,7 @@ export default function LearningPanel() {
                         state.speaking ? learningMode.pause() : void learningMode.play()
                     }
                 >
-                    {state.speaking ? '暂停' : '朗读'}
+                    {state.speaking ? '暂停' : state.kind === 'singing' ? '播放原声' : '朗读'}
                 </button>
                 <button
                     type="button"

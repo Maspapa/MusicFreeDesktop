@@ -7,6 +7,8 @@ import {
     learningLanguage,
     learningLines,
     learningTokens,
+    singingLines,
+    singingRange,
 } from '@common/learningLyrics';
 
 export const learningAtom = atom({
@@ -16,6 +18,8 @@ export const learningAtom = atom({
     loop: false,
     error: '',
     activeToken: -1,
+    kind: 'words' as 'words' | 'singing',
+    singingRate: 1,
 });
 const store = getDefaultStore();
 const state = () => store.get(learningAtom);
@@ -25,7 +29,23 @@ let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let lines: IParsedLrcItem[] = [];
 let songLanguage: Language = 'en';
-let getSource: () => { lines: IParsedLrcItem[]; time: number; pause: () => void };
+let getSource: () => {
+    lines: IParsedLrcItem[];
+    time: number;
+    pause: () => void;
+    duration?: number;
+    speed?: number;
+    offset?: number;
+    play?: () => void;
+    seek?: (time: number) => void;
+    setSpeed?: (rate: number) => void;
+};
+let originalSpeed: number | undefined;
+let boundary: { start: number; end: number } | null = null;
+function restoreSpeed() {
+    if (originalSpeed !== undefined) getSource().setSpeed?.(originalSpeed);
+    originalSpeed = undefined;
+}
 
 const learningMode = {
     configure(source: typeof getSource) {
@@ -47,6 +67,8 @@ const learningMode = {
         generation++;
         clearTimeout(timer);
         update({ speaking: false, activeToken: -1 });
+        boundary = null;
+        if (state().kind === 'singing') getSource().pause();
         void bridge.stop().catch(() => {});
     },
     async play() {
@@ -57,6 +79,22 @@ const learningMode = {
         getSource().pause();
         update({ speaking: true, error: '' });
         try {
+            if (state().kind === 'singing') {
+                const source = getSource();
+                const range = singingRange(
+                    line,
+                    source.lines,
+                    source.offset ?? 0,
+                    source.duration ?? 0,
+                );
+                if (!range || !source.play || !source.seek || !source.setSpeed)
+                    throw new Error('当前句结束时间不可用，请等待歌曲时长加载');
+                source.setSpeed(state().singingRate);
+                source.seek(range.start);
+                boundary = range;
+                source.play();
+                return;
+            }
             const language = learningLanguage(line.lrc, songLanguage);
             const words = learningTokens(line.lrc, language)
                 .map((token, index) => ({ ...token, index }))
@@ -81,9 +119,17 @@ const learningMode = {
                 update({ speaking: false, activeToken: -1, error: String(error) });
         }
     },
-    enter() {
+    enter(kind: 'words' | 'singing' = 'words') {
+        if (kind === 'singing' && new Set(getSource().lines.map((line) => line.time)).size < 2) {
+            update({ error: '学唱法需要带时间轴的歌词' });
+            return;
+        }
+        if (state().enabled) {
+            this.pause();
+            restoreSpeed();
+        }
         const source = getSource();
-        lines = learningLines(source.lines);
+        lines = kind === 'singing' ? singingLines(source.lines) : learningLines(source.lines);
         if (!lines.length) {
             update({ error: '没有歌词，无法开启学习模式' });
             return;
@@ -93,16 +139,18 @@ const learningMode = {
         let index = 0;
         if (new Set(lines.map((line) => line.time)).size > 1) {
             lines.forEach((line, i) => {
-                if (line.time <= source.time) index = i;
+                if (line.time + (source.offset ?? 0) <= source.time) index = i;
             });
         }
-        update({ enabled: true, index, error: '' });
+        if (kind === 'singing') originalSpeed = source.speed ?? 1;
+        update({ enabled: true, index, error: '', kind, loop: kind === 'singing' });
         void this.play();
     },
     exit() {
         this.pause();
+        restoreSpeed();
         lines = [];
-        update({ enabled: false, index: 0, error: '' });
+        update({ enabled: false, index: 0, error: '', kind: 'words', loop: false });
     },
     select(index: number) {
         if (!state().enabled) return;
@@ -116,6 +164,27 @@ const learningMode = {
     toggleLoop() {
         update({ loop: !state().loop });
         if (!state().loop) clearTimeout(timer);
+    },
+    cycleSingingRate() {
+        const rates = [1, 0.75, 0.5];
+        update({ singingRate: rates[(rates.indexOf(state().singingRate) + 1) % rates.length] });
+        if (state().enabled && state().kind === 'singing' && state().speaking) void this.play();
+    },
+    onProgress(time: number) {
+        if (
+            !state().enabled ||
+            state().kind !== 'singing' ||
+            !state().speaking ||
+            !boundary ||
+            time < boundary.end - 0.03
+        )
+            return;
+        if (state().loop) void this.play();
+        else this.pause();
+    },
+    onEnded() {
+        if (state().kind === 'singing' && state().speaking && state().loop) void this.play();
+        else this.pause();
     },
     async speakWord(word: string, language: Language) {
         this.pause();
